@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>拍卖单价趋势</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --paper: #f3f6f2;
+      --surface: #fff;
+      --ink: #20302b;
+      --muted: #6d7a73;
+      --line: #dce5dd;
+      --grid: #e8eee8;
+      --green: #27765e;
+      --orange: #c86845;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; color: var(--ink); background: var(--paper); font-family: "Microsoft YaHei", "PingFang SC", sans-serif; }
+    .page { width: min(1180px, calc(100% - 48px)); margin: 0 auto; padding: 48px 0 56px; }
+    header { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 30px; }
+    .eyebrow { display: flex; align-items: center; gap: 9px; color: var(--green); font-size: 12px; font-weight: 700; }
+    .eyebrow::before { width: 8px; height: 8px; border-radius: 50%; background: var(--orange); content: ""; }
+    h1 { margin: 9px 0 0; font: 500 36px/1.2 Georgia, "Noto Serif SC", serif; }
+    .subtitle { margin: 10px 0 0; color: var(--muted); font-size: 13px; }
+    .unit-mark { padding: 9px 12px; border-left: 2px solid var(--orange); color: var(--muted); font-size: 12px; white-space: nowrap; }
+    .toolbar { display: grid; grid-template-columns: minmax(240px, 1.7fr) minmax(150px, 1fr) minmax(150px, 1fr) auto; gap: 12px; align-items: end; padding: 18px 20px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; }
+    .filter { display: grid; gap: 7px; min-width: 0; }
+    .filter label { color: var(--muted); font-size: 11px; font-weight: 700; }
+    select, button { height: 40px; border: 1px solid var(--line); border-radius: 4px; background: #fff; color: var(--ink); font: inherit; font-size: 13px; }
+    select { width: 100%; padding: 0 32px 0 11px; }
+    select:focus, button:focus-visible { outline: 2px solid var(--green); outline-offset: 2px; }
+    button { padding: 0 15px; cursor: pointer; }
+    button:hover { border-color: var(--green); color: var(--green); }
+    .summary { display: flex; align-items: center; gap: 28px; min-height: 84px; padding: 18px 4px 14px; }
+    .metric { display: grid; gap: 5px; }
+    .metric-label { color: var(--muted); font-size: 11px; }
+    .metric-value { font: 500 21px/1.1 Georgia, "Noto Serif SC", serif; font-variant-numeric: tabular-nums; }
+    .metric-value small { margin-left: 4px; color: var(--muted); font: 12px "Microsoft YaHei", "PingFang SC", sans-serif; }
+    .chart-panel { overflow: hidden; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; }
+    .chart-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 22px 10px; }
+    .chart-title { margin: 0; font-size: 14px; font-weight: 700; }
+    .chart-note { color: var(--muted); font-size: 11px; }
+    .chart-wrap { position: relative; padding: 0 8px 8px; }
+    svg { display: block; width: 100%; height: auto; overflow: visible; }
+    .axis-label { fill: var(--muted); font: 11px "Microsoft YaHei", "PingFang SC", sans-serif; }
+    .empty { position: absolute; inset: 20px 0 50px; display: grid; place-items: center; color: var(--muted); font-size: 13px; pointer-events: none; }
+    .tooltip { position: fixed; z-index: 3; display: none; max-width: 240px; padding: 10px 12px; border: 1px solid #d5e0d7; border-radius: 4px; background: #fff; box-shadow: 0 8px 24px #20302b1a; color: var(--ink); font-size: 12px; line-height: 1.7; pointer-events: none; }
+    .tooltip strong { display: block; font-size: 13px; }
+    footer { display: flex; justify-content: space-between; gap: 18px; padding: 13px 2px 0; color: var(--muted); font-size: 11px; }
+    @media (max-width: 720px) {
+      .page { width: min(100% - 28px, 560px); padding-top: 30px; }
+      header { align-items: flex-start; margin-bottom: 22px; }
+      h1 { font-size: 30px; }
+      .unit-mark { margin-top: 25px; padding-right: 0; }
+      .toolbar { grid-template-columns: 1fr 1fr; padding: 14px; }
+      .filter:first-child { grid-column: 1 / -1; }
+      .toolbar button { align-self: end; }
+      .summary { justify-content: space-between; gap: 12px; padding: 18px 2px; }
+      .metric-value { font-size: 18px; }
+      .chart-head { align-items: flex-start; padding: 16px 14px 8px; }
+      .chart-note { max-width: 45%; text-align: right; line-height: 1.5; }
+      .chart-wrap { padding: 0 3px 4px; }
+      footer { flex-direction: column; gap: 6px; }
+    }
+    @media (max-width: 390px) {
+      .page { width: calc(100% - 20px); }
+      .unit-mark { font-size: 11px; }
+      .summary { gap: 8px; }
+      .metric-value { font-size: 16px; }
+      .metric-value small { font-size: 10px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header>
+      <div>
+        <div class="eyebrow">拍卖数据分析</div>
+        <h1>单价趋势</h1>
+        <p class="subtitle">按拍卖日期观察房产单价变化</p>
+      </div>
+      <div class="unit-mark">Y 轴 · 单价（万元）</div>
+    </header>
+    <section class="toolbar" aria-label="数据筛选">
+      <div class="filter"><label for="community">小区 / 项目</label><select id="community"><option value="">全部小区 / 项目</option></select></div>
+      <div class="filter"><label for="result">结果</label><select id="result"><option value="">全部结果</option></select></div>
+      <div class="filter"><label for="status">状态</label><select id="status"><option value="">全部状态</option></select></div>
+      <button id="reset" type="button" title="清除全部筛选">重置筛选</button>
+    </section>
+    <section class="summary" aria-live="polite">
+      <div class="metric"><span class="metric-label">符合条件记录</span><strong class="metric-value" id="recordCount">—</strong></div>
+      <div class="metric"><span class="metric-label">平均单价</span><strong class="metric-value" id="averagePrice">—</strong></div>
+      <div class="metric"><span class="metric-label">日期范围</span><strong class="metric-value" id="dateRange">—</strong></div>
+    </section>
+    <section class="chart-panel">
+      <div class="chart-head"><h2 class="chart-title">每日平均单价</h2><span class="chart-note" id="pointCount">按日期汇总</span></div>
+      <div class="chart-wrap">
+        <svg id="chart" viewBox="0 0 1000 470" role="img" aria-label="按日期变化的平均单价折线图"></svg>
+        <div class="empty" id="empty" hidden>当前筛选条件下没有可显示的数据</div>
+      </div>
+    </section>
+    <footer><span>同一日期多条记录按单价取平均；日期为空的记录不参与图表。</span><span id="sourceCount"></span></footer>
+  </main>
+  <div class="tooltip" id="tooltip" role="status"></div>
+  <script>
+    const DATA_B64 = "eNrdXeuuZUdxfhd+M0dV1ZfqfhbEu2AECRebQEIIFwdDAOcmBINDMCaKX8bneHiLfN/al9V99l579+ozSEk00pmRpfO5u1d11VfVdfnSl75gYvmV+CvNX/jiFz77+NdPv//D01d+/vmnP3t8/frxk6/hPz5947uP3/oA/3j8w+8+/9PfPf0j/i0PqebsWVKIEi3rl794gkqvVLagHn/5+s1//KqHig8A8BhSVakhhBXJXtmuRdlDNJVUak4qZvWIhAXpbqSgQWK27NifhRVJbiBd2509lFq1usYUubQWad85YXeeYslmIWcr5YwkBYe+85xqwDfToJrdfEXCssI+pJSCYH9mIin1SLZnd/LgMQd1j+ohaW22Z28PSl9p2geFg4I8qScPpaZ0hIqLSNU9RxUecFdMLeJHNLMVCSIV9yGZ1mopJx55PiGFRaTCPqQYQhWswrDHsyCEV1JfadlzUOEBcmk555LcLKYVqbzSnbuLy22xGEOFnL4EScRjgoQGcTmrqEBtZ7oPKTiOGisyiPtZsdxBun5O+HSxFM8hxpxehLS1pnzj213bnT5IhmKpGUgKbbUi4cbUfUiQTGhNNfPscQWKuw+85BgrPh6usKayIoVXFvYdE65IgvKFNoDGOyFRp+xGqrWGLDXFIOVsEyaQ4uGYikShJs9/CSS98ek27FSRmiGYBoXgzTlBPclOVSAKO1xTyJbqigSlEmTvtQMvoFjGmk/ipIueS/uOKYnGyHtXYj0LgSwUw/YtKVWrUdVzdDnfX6Fp2a1T8NUg3AYg6IIDklYek+R9SNlCxZIKbF6qRy2uheIkvg9JYZtACXI1bC6uSDj0ndqpgDmBISZSO9czEk5cdlkWfcC2ipBimJ/Yofqi5t7GgfuinXzf5gw8VaB1FaeeVu57kxSsSO999Pjbv3r8r688/vO3F6pJa2AZtqpoSStZ8d3KQECgRZODmsdi67Jk98WDfhM3qeDAEPT5NUFplhA80E65BmtJq+5EMpxQVMuA07OqO6yp7iOtjuuSTFMyKPP8kjVhIbnCZiaQFlnVr+SdNw/fDhoOJ4UVlZRXtZJ2X2Eo8AKvTAvOSXLnA6W93L4aeTTcqVxWt8x3LskewAZAC0UKXI6TzqSmKzu9TsgAhBuKyVKENxVXJPivdS+HdocpcDJgW+8KlIGUfbtTCwas5CVLtpecE1wDKkznlyu6fjq74eBdN+Y4J6XKhL8IH+/sa+y2LfaQoZ5ADWKB6rRVCnRMjz9TdQo/A1QTcqWlvEAQsKwCzywsyiCeqcHBoO9UdR4dChjHDsrZnfk+nWkPAm+lKtjY4n52+ombe3r3N599/OPHX/7r40cfbtO5Il4FTlTFffHVR8S2yihGqX4gTKRyufUzFz96CAO6KOUKfWtRzkGLuG8vG+ug4Y5jGOkh5Aq/FPrHvaTVZ8YtXb7OEEahtYfAwWDDXrfGWpq9fPQhPu+b3/7hzbdeP/7k1599/JWn9z/YpCT4OIprn2qCD55bQ6tyF/K65+RScGUZZShRawu5EPmZVeLsClSKxAAetq4SSsBsFjKHUMihlDa0hRSdgsS18QptZbgznksDWTpR2wUJKwP1khc9arGF1DILqfAgPUHrhBxyBxnerhCdIgFTq0zXIY9e88wqQUfg8EZ+cGi2C/34diF1Vi5rUWjMrGbBi7X6SnXqQsKEZsslp+wKu1A69TUrRMZwebFUwBXjGm2jJrJJyKpYFE1gBu/0LhQ493lAIHGEsK3wIhxe8xp6sdmN0/PKStomBvXWxztmP49Hgb7ModLk1pV56+wXByUEoAGOcXE/RxuIGCaVetUa4WTUjM+eYgs5oNQ3oqOx1oj7vYRZw5n4kI+FSUgREOpS4aHhFq1cSnX+8uRqcLLhPUTc7DVKQrHMk5C1gkaoZ4ECjuvGGaqetRMVYLCRZsW82TitWZhcZUn4wHC9lJzSV0if3Th8TNCXGtWhMONJa4A0z39xXB7LixulOFHpQk/T9zEbaJbjBoGUnz7PId5js3IZoYDhd2iBG+ravgveuJCfvHvrQuIW4nYXzTmrrCyL0TufhIQG1oxF4u7AQ+og5S7kBjOA5x0KXNwKe55ayMUP3A8JlsVnJzhfBe5u8e7xaRbSGbFwKqOwvkIdbK6/ZcibNvcWJG6PgFlXXMsY1ve75ZXkBr28A2lKMYJnAvH01fSUW6J+S4hgIOH41ei4jGAGTcjcZ4UoPlAo6cQxFFibVaZXQSdXmeAmZ1A2TWTDrc21MgmJz4wPxGdRkKzSquABudw4S4XyTSBuGRq4CaXFzu/cARkfInhBUhMG2ptFhsPL7dRRMnbBd+VEA9TGL3R23/CToXpxlIyPlfZlQuM0JKSn8OJkkIRzxJxOqU5eniR8RIO4w16cPHoG4X3k8mw8NVRoXk0MepcTUydkGlFEG2YcvJIPfepgCCsXJCWalXTIpEUJCXY85dA9Zk1vnCtMfG01uPgdy6qzG6frCCEXXvTUsSyf3HjmO0IA0ZAQYuyCJWHWmiVsGJpN+fzdhKbzLZZ1BxK20SGctcCRTF0Yokya8eoFGsNJ3FLz9HHbz70DWWMB4ZACOhhqGzNQmeUvlgJIQYTrLCV14bE4C4mrDdNToDRAhdso0eTtAXGLzCmoMD3wUrrIhuRplhVj5CMQrmPLBcOsgWTELUVwggp/F/p9J3G7DplA1ENKYK25nj+PLbYnTfLqUmAiwFitMsTbaiKrsw5+dkkRnDplIHeObpn1xoumJYhXmYrXKrcbRveOC1miAA8KzlZ3fImuh9mIm3sAW82CD1Ry88w9FBDdsj3L+3sJ0at0tmd64xkiBMUGSYdf0bCNPBJ42nLHA4wECUyTeJIWuSyzXqlGyQ7njI5K7NIYZh3dAAoIupGr5HwWorRootmImzmz5bIwtdD7LMzpuCCoLzURk/BC6pIo89uEvGch7wSXDaYHyghEvbp3iaw+GbYtXkk4MhyVZ4g6GXFjBEtjyRDOmLR9/dY4+zJD3QauUZOvb2H3rNmd0D/4UIbKgIdfnz0Zh7cLqTcdikvIZw+2ERrIqTso8v1D16wYCe548gpvJZdSuickXsk37/7+6asffvbHb3/+/Q9OeN+8Gb30Qn88a0xdZOOo1G/gbQQFE9gqHHEzkMzQpsQuim3n+iJYIChgMcCRDnaxb5vBswp3PkGoUyq5c8IXvrYbLzEX1QJDd/H8bC3nnPndeDi8HAJ0eSkSmkBgOaRD7P6+8LlLduOb3onxEi5NHR+dRXzZqk75S6uveHwa3AkHafGMuyEl068rHZ7OLA++QijYrWcFAegyy/KoND+/w8z0h3LAJQZy++q0eIn7P0gQicyDLbb6c8uT08yFY4IuM5YExN5LzG2gSqcEsIhA+MBIK6h9pwmlTh5hYnwhpEj25F1i3ZYQ3vay4WCDzvMpucQYu9DpFF7lU78wrTGqxIu46Q28jVQ7F3jrhfHNUK19AjTdv75A7w28O3ri+5+2WcqLE7MbD65lDQ5LZxpbHXiMUuzGA++MEOkg8C/bjOWyKTJ3AjOQveJk26TJbThXdApPQeMSvH4BT+qSaa3M7Fe9Ms0kFoe2abRWPQTh9uPVDOsLHQMrbNqWbIQJeVHY4BLgpAmjo64XCRw7zw/3l3EyvmhbyKYXibG77xuoJbQfGBGzDVL36p73r482mJmIyVNRfOLWyZ+RlwiVz5yraFLpBazrs6n9QkXTi4qVAuPti0c4PJvtxIsPodAiidegK61c1id55n4k3lz4EixJbBx7ua9fNlIgEmPpRQqrRmqXqJHfGt5i1cfl5blVX7KgVcF5V5d+8RllSuUHrZb1KIilC13VmSsCc8m4fMDiYInb9d0TwetXOKdEZwRqykuXRn7PAo/Dre/A+xWMsyiE0Qb+3YUnw5SCsQh9n+Pyd1e5FnRmfTF64auYAjTUNh/YrjsNNx4IaNT4jlxii1S2vuumxEkC+YEFqgnmo4lzbRq1TfVUawzwiIrFkkoZIPXbUosz6kqZw57fT8w8rKTHnsl22jioyR4kPjnieGGmWadQ+uzAnXsCjSsgSl7glmmXs7lB5ralvCwF1pYDi0w6Giz71mQ4npBPcB0S79+ff/jR49e/eXM1CiOc4aoXeCEMZV+sZgCDGXlW4C1kuKymeQ5DitSQ4KImANk0BtN/uZbGZTll6g4dRzEpTOsxWpruZSiPQtTM3JjjH2uDhouWGNoJ69zr6U/fFqBeYmxoP4XqC0zhZe5PW5uxyP7Yl4U/LpI1MLur18g+ug4wxhqZrcq0394mDp9p8sjU7myR4jGPcXFblqCmlLG9MD7IElHIKCxfDhdtCMZEjKV41Z33RVIbTbf6ovPYiQGap3CGsjuTDOfXceVM6ULqqIyFxHxjw13h6bYYUsdvPgQ9ganDFRObxYiC+8Ia7pjLDAbvfqPcX4JBXxXLybV7Ghk8U4GMJWEWbi2sYtSO2Na3AVJGb79bSNSlfEvIftGPYgADHAd8AJcOSogh4DY4fe3WbWghscqcX9avp9p2oFgi+0MSUgLLAlkyBdbWO0jD63A+MZz/dHHEPLqOLQwZtjABzq0VP/2pXXAqjX4XcCumPaTMtNXLhPQhDAY71MwgZWuzGTs/V47tZWMd49+WDwKwtIFFn25t4b4OyxjWAbEoKYKC6FqZsImx1QGEebrwHrO51TZLbhQjPRjzIIPR/FtbBjuOwdJAL0zi8SxSrcUY16jAqPTkMjhmSvMYuYLReW4rFPdCaICRC+HUCeWQ+W3ykp3sw7j+VWbW8ew0JiAuPuzMMq6e6CgrhE6HbSuRBRjw9HQGgwF7nCjOEjqk9lsZ1R2ZERZ8lyx8L8p5BiOAwVRmCMBun2z+BELJ8FGZqq5pHgMeagCZi2rzO6mW8V0kt19Wr3KPrQYRhSXhIDEpqbbV5aN+hz4og3yRubia8nqmfIoJY+sQlg0dOoaxJtmahaQdZH1rIfGqI3YdAzahFpys89mrKbfXwzvLmDNHXz9JYruUE8E9ZPWMuvos6CwurCaqa0r34b1CbVhAWIJWQ2GlRmzzjsMwA4J0qVfH1edTW9eKZNiXwy5gqjPD32uHFT83TBvzXULFpWNLm9CVH+tVBrQRQoZLyBoguMkZ9LZ2hdG3JeQZDAw+PLrMkEFI3ZO1hNGTFRafgTsUSSV7txQZ9XBxZVyN3UHYGatNZBj1tA9aJLIQI8Z4fuhd3qKv8dONkoZiNURm969tSpYCPavDEDDWjJwzC+AcltI9Di6Tw7EEeIY1+epY6vnNa4zi8sGR5apLA5c2B1OG98IGc7AuCt0eJXflpMN0HW6Leg4Vgl9CadsA2DjVTnGpjM5LS6LuzSm+CCOeA8Vj5wFHP4mw55o3LR52BB6WIlDoQvza8veKYcO6PT6AxOQIEgIq0naTvKtE+jCuRKVjuhTbXASph4MoMYUI/nAuHDzmg8VhFxlU7BCVLjV6l7yvoxhMLwcNEXyV2jwC7AsnMythaaEV19ystVnkGEZkv0lNmgWMua0aGHVvlSnEgY3TmKwZbFKdSgk52MLMLLYJvqOuKS1M9QgdBC5SYt/ORF6EsZaPDJ1pIpUqmZRI23ybo07+7NOff/bHbz6+89dP//Crx+++9/jBd54++ac33/ro1jXmw5Ul8RDi2sTgUC2epyD9wSSw/QdsupSm0JfGp0yuMrOZkMPIk+B3yYwLK76E/PNXPmanmxsPU+Cmxem+hGyxtrkeG2d5H1KYpgwDE2VNsA3n7JvbiBud0NhRRN2WDPX2+VR1CjHgOliyBEGU3PXIPFYVzmw7mvWdLefWlh5kzcA/1Kj55IpyhAqFyoisiildZYhMrg22DtoIehmX1kvXr6BMrTLDTVsiEbBbKTYuJ4O7YQqSsTyvMTLdyLwJF+djj+YZeQksXalsFYp/tJDmk5DMYoI8G7tenZMC4tojbgKyLKomso2wq7WQ5pNHCQnyovTxYr3I7r4EfHz9emmt9fUbPSnh2JMhxGpNDjrXmCchgzF5QZSpxdq3AUh3ITfuoLDfaSlso9pUOcqxamcGUjPcbzgSoEY5WctYN7TYvY3Hh8TawSCBdiGGyxbilybmd+/cNDFspshyxMT0++BxQNBbyI1XArj7qSwZcdamO/qWZru/SjChGsDrKvausdMZc5Ak8lax7wB70KcfhOtf583fvPP43nduRtBTwf2ufMH3EjoKeh9yKzNToCTZu888aGe2yhQkbKuyXKA6dMZaU3WA1ElIXkdYBRBvPz8dNJHdGUion4BPw1rm4G0ob0MP3T9K8GnwKGerGK3eZSWEyQ/OrqEK/RbZ5rheJB7NrJJtPuCMgbh7zH15zYa9/f6Hn//pF7ejAPRJIot2RK5MVZiAZG8TYxw+FxW/HIpwE3LjLAVHCQ0EjZm7XI0N8vz43o///JOv3wz3ccTFEg+u0kYu6rHZ6G5I3B34U2wGhetYmor907v0DCRzDnWxtuBt2sZoZW6VtGU1seQYO4/nolZfOJtOQVJZshmfJ0pmWds+6NAqN4oUTJhjzyYA3eiJTSJ9f5VJcY6s8qhlbeWabijg+6vUlCE9WGlhtUJXkKiTcgnXxm3Jw+mKM6Y/ON2lRC4Ul7hW7Pa9VIT/54dvfvH3b779vRsZmMr3Cvw2ncMuV0IHAOLCbdl0WsFta7roPn8fAFzJfKm1W1tykzPEMQBIKAvMmCHFbB7r4rZpACA/4DcZSI84TGszeY5v+fe3oHC68EXjQk7TRSTs6Z2/fXz/t09fZbHl0x9/cOd1UCLjN5LUcZk71nzo27gBtlWVZpx8kEFQkocLO7UPzJyFE8BiLkqnqG0nFmgdS9FAuaFTc23OPB7PfNfC+DIkpQQm3kpfezd2/s9S9LGiUFl2R4JsF1HJzz5+/+kHf/z8ez99+tFvtp+LGL/xXHXpXH8RYX2GsdFCAr/swnYXbn3TkGsYG09O1Zhn64x7ty1V86lN8gAGGxOBiILbQoF1UiTje6Earfji7LdWWhJ2bR3XMeKiY3BRWaFVW4yDezGCwTvapoqH0zSnwbNcmtmzIqRr+C+D/39GvJmTkUOF1k1dxMIG18FkLLbzMj65peIXSXJDe4F0clyIaGuMFsV/bS/7MI4PiEMYbkorWJYIVu0izXX0PNL57kdpqyjrsIxvY5Qdd00KN8N2A75+l3Bu6zSAQY+KxR6c5rLmUR2CtDIKkWXpXQSTDhfS2qlAx2btA2IKExxS5sMO/24f/44d7QfW4ZwvxspbjoezLlfvxRgyfG2N5LDSyciE6Yo6Nb0UIw+bBJipUKm7yAKLtjxl/LP4krecwfcgYKXr+GpjGORLxTWzj39YpyFJMypmAMOYv2DsDAbHqHtfHtXmOFJwT7iRITNJpHRN0Ia16bIG8JLAZBnrMOLop2WDJq3so4tj1Q5jeC8lcu4OJ5aBR5eL7mtj35a91siIEnaU7mFszSzEnU3GcObaU0MW9ZFG17H0f4AeZOJh7DCuydhWQjlfm2QprdPYdtMdvS4sSLFYHQ5OpEPQ9j4al7HAvl44T/aqb912O41aG8AwTnjBfYtNs2HGuGQYg73aAgdrcaSCdxldNnoabHtb2PV3+TmHwfY6Dldp+RlajHHeUCVwVhG2w9SfFSPsONFklS3Ahb05pctOE3/peezBuHoe5dzhZf48yhrrHzEM1izjVNKyF0Mh4srACn/WrgfX8HchXQh0GNNKHA5DxGzYULL0Cq4CX7rOI5qIseu20CpU9i5iDK/tzTa6DmCwNQTvGz5MbtrP5NMc2JGbzyEqjCwxZ8/uaaCNdYRwaKrIzjp1TTfwq+exUTYVFEbfFexUUtOkL58GkA58F4hp5mxONrzR2gafrrGPjTuHI2UHCgiJhNQFsMYxNLF9QD78nCN0VzEmzqOyGo2NB2rX1dX2fBdVPkCL6vynfQZxHNuXh29LDDlGULpcTWs3Nsj3eGEKZstGAtXb/KfRL0tvEG4x+xTm2BaY78bAxQV9UC+d9zNu5By3HkROLbb55Ke0xbEjFREm+3rJuaVz8Sp92VJi+LYcIyFVc6dMrzmDG7Wf7H0SCntPeNN6mO0fh53jykJrh+9hvg4akX0YWAB7xHDoXnzBhXPsB6o0Jeu7WQ0bF4MzKswrw6m4tulgowGHDYyJvRgrx9lWJXUYw+QjVDo/RSNf9WOXTjSsCCubkDNfhaLeTeuw8CIDFZqB6WNuR+X0Z+YS6AuU6YWR27+OUpWFyk0HMT0PSxhybRX+AuwCA9QeJs+jsi2zOkese9NNYv95lKW12prkP0McnmPsvHOBow2FBQtw5bqhwGLjBLew1hG0Hx9m8t4GXcrHSuXQF58/U4h6glK24PNneoGx90wTu1pFYSTIJo/jCsRbWMXbgdh5V9Khg1ZpK4uZwje8DCmJ+c7JPWs7ed52kMqrGPs/ikuITI44O5QTR3qJkffcN8ioxFiLFD5fu09TQtCOZah4aMsMbIdtSUwAdA7hKKbdXq7Z2q0HG1YZgniIS/MOL7rDGbxKTQ99muN4OKqwEBcOJR9A59dxhd7W4egtxIPN/hOYZCoe+tYVO6JzoLVs1q0hWOqyZl+Gscx4smG2X5KyuWQsbOfftzYZpuq4r1JIPfgGVbp3veE3QQ4lZromX6TzpBrjSI8SQSuN4766vt3DcY+IvXDESo4WS5ynYknCMszW8lukUW+DAv1/wlir2IYoUFALrA12NiXyaQp0ScX207lLGrV/HQfZYGc6n17HJcb/1XX8ZYjUW1jF/w6It3AW+fyG9fmnP3v66b+/ef1v95sx8nFAMssa0trBPZ9Lx68ibdSxc0x8FDinWlLX2GyJ0w0jsZq9wGCJGoyfd/0wl3DM8O7kwfkQXKUY+/E3ubh8ZLM9i5KHIrVyDu9igKJd9OLfcVJkWGQ4fNmpudWVS8bZMFJkLaRwyIQZ+GfjNB4zdoaREsf3LiCS6pohGM8pxnuQ2PB8saxlnRK6RK+XTL/hr8d29laDsR1ALG3o5vjmswOpeoHH4GH5YW1zAwn7kGwZE2gczWWl6bEfb9y8rZzuCoffrMITCRedBVqgbaLLCc5FcDqMk12Ujz7D2EqUqsKcC9ZltL7UkegOrQNeIUTaIdfN0/5axTS0jkxdltglklHlbiCqjq4DvFDZOKYwIafLk9c6ug7ug29r5jnl2GX7Dp8pXwkCuFBg48zUlUrbSzGOacsDGAHfhRrZmfCwqodwfiQcwoBk4P9bOFa2LYgpB/d0ACI+cAhZZHdFCJn4RVXowKflIIXMHBRhgL7twm4HH2ZoK4F5w9RvrqEJ8+u4iEVgBLYxTRyKlb3rtJBGzwOGTUBQjVqpG1907atsNbmPNcAYZVaRdWN7FuH40X8/fvcbTz/84PGD79zRQh44GZstaOCX1ZZJHKzaOBKUEK5MYNfp2gRB9XRxdiBxNHJh7ziSia7RcNxCul7s4XAUsabKfjSq3Yuu7kFa8teFw+2zU8d1uY+2b3cM5jFmVGCJPHftqmXPmmCLYGQtchpsTV01VNgJpJXp+cqC/3zZpnPXijijic0dTNvs32MJ5vApMVsM3C/VzBBf6Ycz7T0lHE6EDEAD5baG81jTvweJHYyXcbk5tm1ETwx3XJo4TjyHnAAT+4Zey+PYjjUlEbBIOM4wfdUvaUSDdGM8aI2FzYEEduL2Wd/IDc5w20H8jMy2C2PW4XUYowigM1XWIWxrWHdsHayLZBIa60z6IaLlEmMjp4UvsJWlKnWNIRzMt4xicAJOMSjCXJtX2NMr29BWOC48xSKcbRj6CPX4VlJIbL/LrPzYK5vhdXCcz+FVmw5ZO9DnGsbGcXACEtNi0pqKdkyLiWMYgaE/OLwVxtO170mqg+KxFPsw54r9q6xcJtSOrUN4V3jrGHRvkz/FR88DBNVLAA2hwVy7Ap6G1AytA1s4twV6llY3/F0SW/Eso4bsPKfgmM6mw3LK7oSsN4nhXLZyHBM6fB5J2QYYJlFx8XJbQqnjGGDKMIi+1K3nbjbWzb08q2yC/bKE70unxjqNamEPzKZSvaYQN/wZeNAcOAcAjZ2Ft3HlHjjkkGW+Kffd1gY/8DIh/jCjrjByf1EfNSSsbBsFwpsFfKx23NvKKAaHsbIL5jL3s3TTAdOoAjgQVCHfPWcqH57Ipb4IQ85NUocwFkHn2ERoeGs4brhq67YmF7ECpSToEW1j7se50WPriMxZgsnmF9YuZaCMyodGds6npWEjq65Zz/BeCv3dwkkVpbajBPKwoQqcvsnJh3xAaPqinwN0Q/SBBYnsUMZ+OX7P1m3oQ3c2U6osUc1deG+cxlzFOBQp5GEbozgOZnBmi1pbGzMqYqQxcFKhwth9ux3mmoZFndEhWP4UwXVBDkM3vVV2KFQY3EBFRI83xzl2GPl5weqMlUpdlaYNU6q4zEazpZ4vefeqO3wksE/k64XEqp+EOc64I4PHlRavJumHovhLMcIOpgtXFkaKRauhG4pybB42ZuiYMqBwGdlVKnV10zu8mOsY4x6IPjAHg6OEmDlwfnnwxcLcUiFPv/7F4/v/8ubTn7z5+bubME08dOjT8P6zsI+NaC6HXA/yh7SM3xCBXk0bzuHj69ePn3ztxrBtsGXOEoMiaAtYO8V8xtgql5IlU4fJJW0HhdyK6h2MyvqTym4YHIrU5qeYj+0FjDmHWDmAlqami6lqGMUIBv6fy1I01UwT4LUbxnCRGthzZtEhK0anEW+eBwNSCs8fH4aZYT0ZGjxTrANeMsvpMnNu6j2Mjb2w/eJCmTlMpJ101ljdO3sRciF2TFh6lK9kKLZq6I58AAM8RmC9Q1OR1zsQt0W9+6Uwunb2AIRQcdhj6Mcf2k15eN6v2gO7TiqLibXLaxkXKz6cMJU9soV/7CY7DmNoYZYOk9IgVX2roeFPwbBWZZknuyFo+5bYqK6bGAq5ylqX6IdW79ynhqffUzvsyg7HtLLRXL63l614EqPatCpe65VnqaF1VNGAjwurD2vy5S//DzEzgPE=";
+    const binary = atob(DATA_B64);
+    const compressed = Uint8Array.from(binary, character => character.charCodeAt(0));
+    const dataStream = new Blob([compressed]).stream().pipeThrough(new DecompressionStream('deflate'));
+    new Response(dataStream).json().then(data => initialize(data)).catch(() => {
+      document.getElementById('empty').hidden = false;
+      document.getElementById('empty').textContent = '数据加载失败，请使用新版 Chrome、Edge 或 Firefox 打开。';
+    });
+
+    function initialize(rawData) {
+      const DATA = rawData.map(([date, community, result, status, price]) => ({ date, community, result, status, price }));
+      const svg = document.getElementById('chart');
+      const tooltip = document.getElementById('tooltip');
+      const filters = ['community', 'result', 'status'];
+      const numberFormat = new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 3 });
+
+      function populateFilter(id, key) {
+        const select = document.getElementById(id);
+        const values = [...new Set(DATA.map(row => row[key]).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'zh-CN'));
+        for (const value of values) {
+          const option = document.createElement('option');
+          option.value = value;
+          option.textContent = value;
+          select.append(option);
+        }
+        select.addEventListener('change', render);
+      }
+
+      function niceStep(raw) {
+        const magnitude = 10 ** Math.floor(Math.log10(raw || 1));
+        const fraction = raw / magnitude;
+        return (fraction <= 1 ? 1 : fraction <= 2 ? 2 : fraction <= 5 ? 5 : 10) * magnitude;
+      }
+
+      function makeSvgElement(name, attrs = {}) {
+        const element = document.createElementNS('http://www.w3.org/2000/svg', name);
+        for (const [key, value] of Object.entries(attrs)) element.setAttribute(key, value);
+        return element;
+      }
+
+      function render() {
+        const selected = Object.fromEntries(filters.map(id => [id, document.getElementById(id).value]));
+        const rows = DATA.filter(row => filters.every(id => !selected[id] || row[id] === selected[id]));
+        const buckets = new Map();
+        for (const row of rows) {
+          const value = buckets.get(row.date) || { sum: 0, count: 0 };
+          value.sum += row.price;
+          value.count += 1;
+          buckets.set(row.date, value);
+        }
+        const points = [...buckets.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([date, value]) => ({ date, price: value.sum / value.count, count: value.count }));
+        const average = rows.length ? rows.reduce((sum, row) => sum + row.price, 0) / rows.length : null;
+        document.getElementById('recordCount').textContent = numberFormat.format(rows.length);
+        document.getElementById('averagePrice').innerHTML = average === null ? '—' : `${numberFormat.format(average)}<small>万元</small>`;
+        document.getElementById('dateRange').textContent = points.length ? `${points[0].date} — ${points[points.length - 1].date}` : '—';
+        document.getElementById('pointCount').textContent = `${points.length} 个日期点`;
+        document.getElementById('empty').hidden = points.length > 0;
+        document.getElementById('sourceCount').textContent = `图表有效记录 ${DATA.length} 条`;
+        drawChart(points);
+      }
+
+      function drawChart(points) {
+        svg.replaceChildren();
+        if (!points.length) return;
+        const width = 1000, height = 470, left = 76, right = 26, top = 24, bottom = 54;
+        const plotWidth = width - left - right, plotHeight = height - top - bottom;
+        const minPrice = Math.min(...points.map(point => point.price));
+        const maxPrice = Math.max(...points.map(point => point.price));
+        const step = niceStep((maxPrice - minPrice) / 4 || maxPrice / 4 || 1);
+        const padding = (maxPrice - minPrice || step) * 0.12;
+        const low = Math.max(0, Math.floor((minPrice - padding) / step) * step);
+        const high = Math.ceil((maxPrice + padding) / step) * step || low + step;
+        const times = points.map(point => Date.parse(`${point.date}T00:00:00`));
+        const firstTime = times[0], lastTime = times[times.length - 1];
+        const x = time => left + (lastTime === firstTime ? plotWidth / 2 : (time - firstTime) / (lastTime - firstTime) * plotWidth);
+        const y = price => top + (high - price) / (high - low) * plotHeight;
+
+        for (let value = low; value <= high + step * 0.001; value += step) {
+          const position = y(value);
+          svg.append(makeSvgElement('line', { x1: left, x2: width - right, y1: position, y2: position, stroke: '#e8eee8', 'stroke-width': 1 }));
+          const label = makeSvgElement('text', { x: left - 12, y: position + 4, 'text-anchor': 'end', class: 'axis-label' });
+          label.textContent = numberFormat.format(value);
+          svg.append(label);
+        }
+
+        const tickCount = Math.min(6, points.length);
+        for (let index = 0; index < tickCount; index++) {
+          const pointIndex = Math.round(index * (points.length - 1) / Math.max(1, tickCount - 1));
+          const label = makeSvgElement('text', { x: x(times[pointIndex]), y: height - 19, 'text-anchor': index === 0 ? 'start' : index === tickCount - 1 ? 'end' : 'middle', class: 'axis-label' });
+          label.textContent = points[pointIndex].date.slice(0, 7);
+          svg.append(label);
+        }
+
+        const path = points.map((point, index) => `${index ? 'L' : 'M'}${x(times[index]).toFixed(2)},${y(point.price).toFixed(2)}`).join(' ');
+        svg.append(makeSvgElement('path', { d: path, fill: 'none', stroke: '#27765e', 'stroke-width': 2.5, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'vector-effect': 'non-scaling-stroke' }));
+
+        for (let index = 0; index < points.length; index++) {
+          const point = points[index], cx = x(times[index]), cy = y(point.price);
+          const hit = makeSvgElement('circle', { cx, cy, r: 10, fill: 'transparent', tabindex: 0, 'aria-label': `${point.date}，平均单价 ${numberFormat.format(point.price)} 万元，${point.count} 条记录` });
+          const dot = makeSvgElement('circle', { cx, cy, r: 3, fill: '#fff', stroke: '#27765e', 'stroke-width': 2, 'pointer-events': 'none' });
+          const showTooltip = event => {
+            tooltip.replaceChildren();
+            const title = document.createElement('strong');
+            title.textContent = point.date;
+            tooltip.append(title, `平均单价 ${numberFormat.format(point.price)} 万元`, document.createElement('br'), `记录数 ${point.count} 条`);
+            tooltip.style.display = 'block';
+            const rect = hit.getBoundingClientRect();
+            const leftPosition = event.clientX || rect.left;
+            const topPosition = event.clientY || rect.top;
+            tooltip.style.left = `${Math.min(window.innerWidth - 250, Math.max(8, leftPosition + 12))}px`;
+            tooltip.style.top = `${Math.max(8, topPosition - 62)}px`;
+          };
+          hit.addEventListener('pointerenter', showTooltip);
+          hit.addEventListener('pointermove', showTooltip);
+          hit.addEventListener('pointerleave', () => { tooltip.style.display = 'none'; });
+          hit.addEventListener('focus', showTooltip);
+          hit.addEventListener('blur', () => { tooltip.style.display = 'none'; });
+          svg.append(hit, dot);
+        }
+      }
+
+      populateFilter('community', 'community');
+      populateFilter('result', 'result');
+      populateFilter('status', 'status');
+      document.getElementById('reset').addEventListener('click', () => {
+        for (const id of filters) document.getElementById(id).value = '';
+        render();
+      });
+      render();
+    }
+  </script>
+</body>
+</html>
